@@ -1,6 +1,7 @@
 gTTS
 pyttsx3
-edge-tts
+edge-tts>=7.3.0
 pygame
 SpeechRecognition
 pydub
+jiwer

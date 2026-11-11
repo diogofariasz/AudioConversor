@@ -3,6 +3,11 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 import pygame
 import speech_recognition as sr
+try:
+    import speech_recognition.recognizers.google as sr_google
+    sr_google.ENDPOINT = "https://www.google.com/speech-api/v2/recognize"
+except Exception:
+    pass
 from pydub import AudioSegment
 import os
 import tempfile
@@ -152,27 +157,59 @@ def audio_para_texto():
 
         audio.export(caminho_wav, format="wav")
 
-        with sr.AudioFile(caminho_wav) as fonte:
-            dados_audio = reconhecedor.record(fonte)
+        resultado_texto.delete("1.0", tk.END)
+        resultado_texto.insert(tk.END, "Transcrevendo áudio, por favor aguarde...")
+        janela.update()
 
-        texto_reconhecido = reconhecedor.recognize_google(
-            dados_audio,
-            language="pt-BR"
-        )
+        partes_texto = []
+        with sr.AudioFile(caminho_wav) as fonte:
+            while True:
+                dados_audio = reconhecedor.record(fonte, duration=30)
+                if not dados_audio or not dados_audio.frame_data:
+                    break
+
+                for tentativa in range(2):
+                    try:
+                        trecho = reconhecedor.recognize_google(
+                            dados_audio,
+                            language="pt-BR",
+                            endpoint="https://www.google.com/speech-api/v2/recognize"
+                        )
+                        if trecho:
+                            partes_texto.append(trecho)
+                        break
+                    except sr.UnknownValueError:
+                        break
+                    except (ConnectionResetError, sr.RequestError, OSError) as erro_conexao:
+                        if tentativa == 0:
+                            import time
+                            time.sleep(1)
+                            continue
+                        raise erro_conexao
+
+        texto_reconhecido = " ".join(partes_texto).strip()
 
         resultado_texto.delete("1.0", tk.END)
+
+        if not texto_reconhecido:
+            messagebox.showwarning(
+                "Aviso",
+                "Não foi possível entender o áudio ou não há fala identificada."
+            )
+            return
+
         resultado_texto.insert(tk.END, texto_reconhecido)
+
+    except (sr.RequestError, ConnectionResetError) as erro:
+        messagebox.showerror(
+            "Erro de Conexão",
+            f"Erro no serviço de reconhecimento:\n{erro}\n\nVerifique sua conexão com a internet ou se há restrições de rede/firewall."
+        )
 
     except sr.UnknownValueError:
         messagebox.showerror(
             "Erro",
             "Não foi possível entender o áudio."
-        )
-
-    except sr.RequestError as erro:
-        messagebox.showerror(
-            "Erro",
-            f"Erro no serviço de reconhecimento:\n{erro}"
         )
 
     except Exception as erro:
